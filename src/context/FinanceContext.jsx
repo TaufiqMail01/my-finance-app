@@ -1,82 +1,146 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { supabase } from '../services/supabaseClient';
 
 const FinanceContext = createContext();
 
 export const FinanceProvider = ({ children }) => {
-  // Kosongkan data dompet dummy (dimulai dengan array kosong)
-  const [wallets, setWallets] = useState(() => {
-    const saved = localStorage.getItem('finance_wallets');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [wallets, setWallets] = useState([]);
+  const [categories, setCategories] = useState({ income: [], expense: [] });
+  const [transactions, setTransactions] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // Kosongkan kategori custom dummy (dimulai dengan array kosong)
-  const [categories, setCategories] = useState(() => {
-    const saved = localStorage.getItem('finance_categories');
-    return saved ? JSON.parse(saved) : {
-      income: [],
-      expense: []
-    };
-  });
-
-  // Kosongkan riwayat transaksi dummy
-  const [transactions, setTransactions] = useState(() => {
-    const saved = localStorage.getItem('finance_transactions');
-    return saved ? JSON.parse(saved) : [];
-  });
-
+  // Ambil data awal dari Supabase saat aplikasi dimuat
   useEffect(() => {
-    localStorage.setItem('finance_wallets', JSON.stringify(wallets));
-  }, [wallets]);
+    fetchInitialData();
+  }, []);
 
-  useEffect(() => {
-    localStorage.setItem('finance_categories', JSON.stringify(categories));
-  }, [categories]);
+  const fetchInitialData = async () => {
+    try {
+      setLoading(true);
 
-  useEffect(() => {
-    localStorage.setItem('finance_transactions', JSON.stringify(transactions));
-  }, [transactions]);
+      // 1. Ambil data Wallets
+      const { data: walletsData, error: walletsError } = await supabase
+        .from('wallets')
+        .select('*');
+      if (walletsError) throw walletsError;
 
-  const addTransaction = (newTx) => {
-    const amount = parseFloat(newTx.amount);
+      // 2. Ambil data Categories
+      const { data: categoriesData, error: categoriesError } = await supabase
+        .from('categories')
+        .select('*');
+      if (categoriesError) throw categoriesError;
 
-    setWallets(prevWallets => 
-      prevWallets.map(wallet => {
-        if (wallet.id === newTx.walletId) {
-          const updatedBalance = newTx.type === 'income' 
-            ? wallet.balance + amount 
-            : wallet.balance - amount;
-          return { ...wallet, balance: updatedBalance };
-        }
-        return wallet;
-      })
-    );
+      // Pisahkan kategori berdasarkan tipenya ('income' atau 'expense')
+      const incomeCats = categoriesData.filter(c => c.type === 'income').map(c => c.name);
+      const expenseCats = categoriesData.filter(c => c.type === 'expense').map(c => c.name);
 
-    const transactionWithId = {
-      ...newTx,
-      id: Date.now().toString(),
-      amount: amount
-    };
+      // 3. Ambil data Transactions
+      const { data: txData, error: txError } = await supabase
+        .from('transactions')
+        .select('*')
+        .order('date', { ascending: false });
+      if (txError) throw txError;
 
-    setTransactions(prev => [transactionWithId, ...prev]);
+      setWallets(walletsData || []);
+      setCategories({ income: incomeCats, expense: expenseCats });
+      setTransactions(txData || []);
+    } catch (error) {
+      console.error('Gagal memuat data dari Supabase:', error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const deleteTransaction = (id) => {
+  // Tambah Transaksi & Update Saldo Rekening di Supabase
+  const addTransaction = async (newTx) => {
+    const amount = parseFloat(newTx.amount);
+    const txId = 'tx_' + Date.now();
+
+    // Cari rekening yang terlibat
+    const targetWallet = wallets.find(w => w.id === newTx.walletId);
+    if (!targetWallet) return;
+
+    const updatedBalance = newTx.type === 'income' 
+      ? targetWallet.balance + amount 
+      : targetWallet.balance - amount;
+
+    try {
+      // 1. Update saldo rekening di database
+      const { error: walletError } = await supabase
+        .from('wallets')
+        .update({ balance: updatedBalance })
+        .eq('id', newTx.walletId);
+
+      if (walletError) throw walletError;
+
+      // 2. Simpan transaksi baru ke database
+      const transactionWithId = {
+        ...newTx,
+        id: txId,
+        amount: amount
+      };
+
+      const { error: txError } = await supabase
+        .from('transactions')
+        .insert([transactionWithId]);
+
+      if (txError) throw txError;
+
+      // Update state lokal
+      setWallets(prevWallets => 
+        prevWallets.map(wallet => 
+          wallet.id === newTx.walletId ? { ...wallet, balance: updatedBalance } : wallet
+        )
+      );
+      setTransactions(prev => [transactionWithId, ...prev]);
+    } catch (error) {
+      console.error('Gagal menyimpan transaksi:', error.message);
+      alert('Terjadi kesalahan saat menyimpan transaksi ke database.');
+    }
+  };
+
+  // Hapus Transaksi & Kembalikan Saldo Rekening di Supabase
+  const deleteTransaction = async (id) => {
     const txToDelete = transactions.find(tx => tx.id === id);
     if (!txToDelete) return;
 
-    setWallets(prevWallets =>
-      prevWallets.map(wallet => {
-        if (wallet.id === txToDelete.walletId) {
-          const revertedBalance = txToDelete.type === 'income'
-            ? wallet.balance - txToDelete.amount
-            : wallet.balance + txToDelete.amount;
-          return { ...wallet, balance: revertedBalance };
-        }
-        return wallet;
-      })
-    );
+    const targetWallet = wallets.find(w => w.id === txToDelete.walletId);
+    if (!targetWallet) return;
 
-    setTransactions(prev => prev.filter(tx => tx.id !== id));
+    const revertedBalance = txToDelete.type === 'income'
+      ? targetWallet.balance - txToDelete.amount
+      : targetWallet.balance + txToDelete.amount;
+
+    try {
+      // 1. Kembalikan saldo rekening di database
+      if (targetWallet) {
+        const { error: walletError } = await supabase
+          .from('wallets')
+          .update({ balance: revertedBalance })
+          .eq('id', txToDelete.walletId);
+
+        if (walletError) throw walletError;
+      }
+
+      // 2. Hapus transaksi dari database
+      const { error: txError } = await supabase
+        .from('transactions')
+        .delete()
+        .eq('id', id);
+
+      if (txError) throw txError;
+
+      // Update state lokal
+      setWallets(prevWallets =>
+        prevWallets.map(wallet =>
+          wallet.id === txToDelete.walletId ? { ...wallet, balance: revertedBalance } : wallet
+        )
+      );
+      setTransactions(prev => prev.filter(tx => tx.id !== id));
+    } catch (error) {
+      console.error('Gagal menghapus transaksi:', error.message);
+      alert('Terjadi kesalahan saat menghapus transaksi.');
+    }
   };
 
   return (
@@ -84,9 +148,11 @@ export const FinanceProvider = ({ children }) => {
       wallets,
       setWallets,
       categories,
+      setCategories,
       transactions,
       addTransaction,
-      deleteTransaction
+      deleteTransaction,
+      loading
     }}>
       {children}
     </FinanceContext.Provider>
