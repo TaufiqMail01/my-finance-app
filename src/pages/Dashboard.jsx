@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useFinance } from '../context/FinanceContext';
 import { formatRupiah } from '../utils/formatters';
 import { exportTransactionsToExcel } from '../services/excelService';
+import { supabase } from '../services/supabaseClient';
 
 export default function Dashboard() {
   const {
@@ -246,20 +247,35 @@ export default function Dashboard() {
     setShowWalletModal(false);
   };
 
-  const handleSaveCategory = (e) => {
+  const handleSaveCategory = async (e) => {
     e.preventDefault();
     if (!catName.trim()) return;
-    if (categories[catType].includes(catName.trim())) {
+
+    const trimmedCatName = catName.trim();
+    if (categories[catType].includes(trimmedCatName)) {
       alert('Kategori tersebut sudah ada!');
       return;
     }
-    const updated = {
-      ...categories,
-      [catType]: [...categories[catType], catName.trim()],
-    };
-    setCategories(updated);
-    setCatName('');
-    setShowCategoryModal(false);
+
+    try {
+      const { error } = await supabase
+        .from('categories')
+        .insert([{ type: catType, name: trimmedCatName }]);
+
+      if (error) throw error;
+
+      const updated = {
+        ...categories,
+        [catType]: [...categories[catType], trimmedCatName],
+      };
+      setCategories(updated);
+      setCatName('');
+      setShowCategoryModal(false);
+      alert('✅ Kategori baru berhasil ditambahkan!');
+    } catch (error) {
+      console.error('Gagal menyimpan kategori:', error.message);
+      alert('Gagal menyimpan kategori ke database.');
+    }
   };
 
   const handleTransfer = (e) => {
