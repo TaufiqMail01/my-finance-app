@@ -200,7 +200,6 @@ export default function Dashboard() {
       const id = targetData;
       const updated = wallets.filter((w) => w.id !== id);
       setWallets(updated);
-      localStorage.setItem('finance_wallets', JSON.stringify(updated));
       alert('🔒 Rekening berhasil dihapus dengan verifikasi PIN.');
     } else if (pendingAction === 'delete_tx') {
       deleteTransaction(targetData);
@@ -242,7 +241,6 @@ export default function Dashboard() {
     }
 
     setWallets(updatedWallets);
-    localStorage.setItem('finance_wallets', JSON.stringify(updatedWallets));
     setWalletName('');
     setWalletBalance('');
     setShowWalletModal(false);
@@ -260,7 +258,6 @@ export default function Dashboard() {
       [catType]: [...categories[catType], catName.trim()],
     };
     setCategories(updated);
-    localStorage.setItem('finance_categories', JSON.stringify(updated));
     setCatName('');
     setShowCategoryModal(false);
   };
@@ -300,7 +297,6 @@ export default function Dashboard() {
     });
 
     setWallets(updatedWallets);
-    localStorage.setItem('finance_wallets', JSON.stringify(updatedWallets));
 
     const toW = wallets.find((w) => w.id === toWalletId);
     addTransaction({
@@ -862,7 +858,7 @@ export default function Dashboard() {
           </div>
         </section>
 
-        {/* Ringkasan Kategori (Opsional) */}
+        {/* Ringkasan Kategori (Dinamis sesuai Database) */}
         <section className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
           <div className="flex justify-between items-center">
             <div>
@@ -871,11 +867,11 @@ export default function Dashboard() {
                   Ringkasan Kategori
                 </h2>
                 <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">
-                  Opsional
+                  Dinamis
                 </span>
               </div>
               <p className="text-xs text-gray-400 mt-0.5">
-                Lihat ringkasan pengeluaran Anda berdasarkan kategori.
+                Total pengeluaran berdasarkan kategori yang tersedia.
               </p>
             </div>
             <div className="text-right">
@@ -885,50 +881,47 @@ export default function Dashboard() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-            {[
-              { name: 'Makanan & Minuman', icon: '🍲', color: 'bg-emerald-500' },
-              { name: 'Tagihan & Utilitas', icon: '⚡', color: 'bg-amber-500' },
-              { name: 'Transportasi', icon: '🚗', color: 'bg-blue-500' },
-              { name: 'Kesehatan', icon: '❤️', color: 'bg-rose-500' },
-              { name: 'Belanja', icon: '🛍️', color: 'bg-purple-500' },
-              { name: 'Lainnya', icon: '📦', color: 'bg-gray-400' },
-            ].map((cat) => {
-              const catTotal = monthlyTransactions
-                .filter(
-                  (tx) =>
-                    tx.type === 'expense' &&
-                    tx.category.toLowerCase().includes(cat.name.toLowerCase().split(' ')[0])
-                )
-                .reduce((acc, tx) => acc + tx.amount, 0);
+            {categories.expense.length === 0 ? (
+              <p className="text-center text-gray-400 py-4 text-xs col-span-2">Belum ada kategori pengeluaran.</p>
+            ) : (
+              categories.expense.map((catName) => {
+                const catTotal = monthlyTransactions
+                  .filter(
+                    (tx) =>
+                      tx.type === 'expense' &&
+                      tx.category.trim().toLowerCase() === catName.trim().toLowerCase()
+                  )
+                  .reduce((acc, tx) => acc + tx.amount, 0);
 
-              const percentCat =
-                totalExpense > 0
-                  ? Math.min(Math.round((catTotal / totalExpense) * 100), 100)
-                  : 0;
+                const percentCat =
+                  totalExpense > 0
+                    ? Math.min(Math.round((catTotal / totalExpense) * 100), 100)
+                    : 0;
 
-              return (
-                <div
-                  key={cat.name}
-                  className="p-3.5 rounded-xl bg-gray-50/80 border border-gray-100 space-y-2"
-                >
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="font-bold text-gray-700 flex items-center gap-2">
-                      <span className="w-6 h-6 rounded-lg bg-white shadow-xs flex items-center justify-center text-xs border border-gray-200">
-                        {cat.icon}
+                return (
+                  <div
+                    key={catName}
+                    className="p-3.5 rounded-xl bg-gray-50/80 border border-gray-100 space-y-2"
+                  >
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="font-bold text-gray-700 flex items-center gap-2 truncate pr-2">
+                        <span className="w-6 h-6 rounded-lg bg-white shadow-xs flex items-center justify-center text-xs border border-gray-200 shrink-0">
+                          🏷️
+                        </span>
+                        <span className="truncate">{catName}</span>
                       </span>
-                      {cat.name}
-                    </span>
-                    <span className="font-bold text-gray-900">{percentCat}%</span>
+                      <span className="font-extrabold text-rose-600 shrink-0">{formatRupiah(catTotal)} ({percentCat}%)</span>
+                    </div>
+                    <div className="w-full bg-gray-200 h-1.5 rounded-full overflow-hidden">
+                      <div
+                        className="bg-rose-500 h-full rounded-full transition-all duration-500"
+                        style={{ width: `${percentCat}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="w-full bg-gray-200 h-1.5 rounded-full overflow-hidden">
-                    <div
-                      className={`${cat.color} h-full rounded-full transition-all duration-500`}
-                      style={{ width: `${percentCat}%` }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         </section>
       </div>
