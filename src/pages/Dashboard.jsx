@@ -15,6 +15,23 @@ export default function Dashboard() {
     deleteTransaction,
   } = useFinance();
 
+  // ===== Helper untuk format input angka menjadi ribuan (misal: 100.000) =====
+  const formatInputRupiah = (value) => {
+    if (!value && value !== 0) return '';
+    const numberString = value.toString().replace(/[^,\d]/g, '');
+    const split = numberString.split(',');
+    let sisa = split[0].length % 3;
+    let rupiah = split[0].substr(0, sisa);
+    let ribuan = split[0].substr(sisa).match(/\d{3}/gi);
+
+    if (ribuan) {
+      let separator = sisa ? '.' : '';
+      rupiah += separator + ribuan.join('.');
+    }
+
+    return split[1] !== undefined ? rupiah + ',' + split[1] : rupiah;
+  };
+
   // ===== Derived data =====
   const totalBalance = useMemo(
     () => wallets.reduce((acc, w) => acc + w.balance, 0),
@@ -1202,14 +1219,20 @@ export default function Dashboard() {
                 <label className="block text-[11px] font-semibold text-gray-500 uppercase mb-1.5">
                   Nominal (Rp)
                 </label>
-                <input
-                  type="number"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  placeholder="50000"
-                  required
-                  className="w-full px-3.5 py-2.5 rounded-xl border text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                />
+                <div className="relative flex items-center">
+                  <span className="absolute left-3.5 text-sm font-bold text-gray-400">Rp</span>
+                  <input
+                    type="text"
+                    value={formatInputRupiah(amount)}
+                    onChange={(e) => {
+                      const rawValue = e.target.value.replace(/\./g, '');
+                      setAmount(rawValue);
+                    }}
+                    placeholder="50.000"
+                    required
+                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  />
+                </div>
               </div>
               <div>
                 <label className="block text-[11px] font-semibold text-gray-500 uppercase mb-1.5">
@@ -1332,13 +1355,19 @@ export default function Dashboard() {
                 <label className="block text-[11px] font-semibold text-gray-500 uppercase mb-1.5">
                   Saldo Awal (Rp)
                 </label>
-                <input
-                  type="number"
-                  value={walletBalance}
-                  onChange={(e) => setWalletBalance(e.target.value)}
-                  placeholder="1000000"
-                  className="w-full px-3.5 py-2.5 rounded-xl border text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                />
+                <div className="relative flex items-center">
+                  <span className="absolute left-3.5 text-sm font-bold text-gray-400">Rp</span>
+                  <input
+                    type="text"
+                    value={formatInputRupiah(walletBalance)}
+                    onChange={(e) => {
+                      const rawValue = e.target.value.replace(/\./g, '');
+                      setWalletBalance(rawValue);
+                    }}
+                    placeholder="1.000.000"
+                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  />
+                </div>
               </div>
               <div className="flex gap-2 pt-2">
                 <button
@@ -1482,14 +1511,20 @@ export default function Dashboard() {
                 <label className="block text-[11px] font-semibold text-gray-500 uppercase mb-1.5">
                   Nominal Transfer (Rp)
                 </label>
-                <input
-                  type="number"
-                  value={transferAmount}
-                  onChange={(e) => setTransferAmount(e.target.value)}
-                  placeholder="100000"
-                  required
-                  className="w-full px-3.5 py-2.5 rounded-xl border text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                />
+                <div className="relative flex items-center">
+                  <span className="absolute left-3.5 text-sm font-bold text-gray-400">Rp</span>
+                  <input
+                    type="text"
+                    value={formatInputRupiah(transferAmount)}
+                    onChange={(e) => {
+                      const rawValue = e.target.value.replace(/\./g, '');
+                      setTransferAmount(rawValue);
+                    }}
+                    placeholder="100.000"
+                    required
+                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  />
+                </div>
               </div>
               <div className="flex gap-2 pt-2">
                 <button
